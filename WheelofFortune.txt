@@ -1,0 +1,312 @@
+//these pins can not be changed 2/3 are special pins
+int encoderPin1 = 2;
+int encoderPin2 = 3;
+
+volatile int lastEncoded = 0;
+volatile long encoderValue = 0;
+
+int lastMSB = 0;
+int lastLSB = 0;
+
+int buttonPin = 7;
+int buttonState = 0;
+
+String wordVar = "VIOLET";
+String wordCheck = "VIOLET";
+char letter = ' ';
+int counter = 0;
+boolean fail = false;
+int roundCheck = 1;
+int passCounter = 0;
+boolean start = true;
+
+unsigned long Watch, _micro, time = micros();
+unsigned int Clock = 0, R_clock;
+boolean Reset = false, Stop = false, Paused = false;
+volatile boolean timeFlag = false;
+String timer = "";
+
+void setup() {
+  Serial.begin(9600);
+  SetTimer(0, 1, 31); // 10 seconds
+  StartTimer();
+  pinMode(buttonPin, INPUT);
+
+  pinMode(encoderPin1, INPUT);
+  pinMode(encoderPin2, INPUT);
+
+  digitalWrite(encoderPin1, HIGH); //turn pullup resistor on
+  digitalWrite(encoderPin2, HIGH); //turn pullup resistor on
+
+  delay(100);
+  Serial.write(0xFE); //contrast
+  Serial.write(0x52);
+  Serial.write(45); //sends byte with value
+  delay(500);
+  Serial.write(0xFE); //backlight brightness
+  Serial.write(0x53);
+  Serial.write(8); //sends byte with value
+  delay(100);
+  clearScreen();
+  Serial.print("                                ");
+  delay(20);
+  Serial.write(0xFE); //blinking cursor off
+  Serial.write(0x4C);
+  delay(350);
+  Serial.write(0xFE); //underline off
+  Serial.write(0x48);
+  delay(20);
+  updateEncoder();
+  //call updateEncoder() when any high/low changed seen
+  //on interrupt 0 (pin 2), or interrupt 1 (pin 3)
+  attachInterrupt(digitalPinToInterrupt(2), updateEncoder, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(3), updateEncoder, CHANGE);
+}
+
+void loop() {
+  Serial.write(0xFE); //set cursor home
+  Serial.write(0x46);
+  delay(2);
+  if (fail == true) {
+    ResetTimer();
+    clearScreen();
+    resetEncoder();
+    fail = false;
+    counter = 0;
+    roundCheck = 1;
+    wordVar = "VIOLET";
+    wordCheck = wordVar;
+    start = true;
+  }
+  if (start)
+  {
+    StopTimer();
+    clearScreen();
+    Serial.print("  PRESS BUTTON");
+    Serial.write(0xFE); //set cursor position
+    Serial.write(0x45);
+    Serial.write(0x40); //bottom left
+    delay(100);
+    Serial.print("    TO BEGIN");
+    do
+    {
+      buttonState = digitalRead(buttonPin);
+    } while (buttonState == HIGH);
+    StartTimer();
+    start = false;
+    clearScreen();
+  }
+  if ((roundCheck == 1 && passCounter >= wordVar.length()) || (roundCheck == 2 && passCounter >= 6) || (roundCheck == 3 && passCounter >= 7)) {
+    clearScreen();
+    if (roundCheck == 1)
+      wordVar = "HONEYBEE";
+
+    else if (roundCheck == 2)
+      wordVar = "DANDELION";
+    else if (roundCheck == 3)
+    {
+      clearScreen();
+      Serial.print("YOU WON!");
+      Serial.write(0xFE); //set cursor position
+      Serial.write(0x45);
+      Serial.write(0x40); //bottom left
+      Serial.print("CODE: GUC");
+      for (int i = 0; i < 5; i = 0)
+      {}
+    }
+    Serial.print("YAY! NEXT ROUND!");
+    delay(750);
+    wordCheck = wordVar;
+    passCounter = 0;
+    resetEncoder();
+    roundCheck++;
+    counter = 0;
+    clearScreen();
+    ResetTimer();
+  }
+  if (counter == 0) {
+    for (int i = 0; i < wordVar.length(); i++) {
+      Serial.print("_");
+    }
+    counter++;
+  }
+  Serial.write(0xFE); //set cursor position
+  Serial.write(0x45);
+  Serial.write(0x4F); //bottom right
+  delay(10);
+  Serial.print(letter);
+  buttonState = digitalRead(buttonPin);
+  if (buttonState == LOW && !(TimeCheck(0, 1, 31)))
+  {
+    checkLetter(letter);
+  }
+
+  CountDownTimer(); // run the timer
+  // this prevents the time from being constantly shown.
+  if (TimeHasChanged()) {
+    Serial.write(0xFE); //set cursor position
+    Serial.write(0x45);
+    Serial.write(0x40); //bottom left
+    timer.concat(ShowMinutes());
+    timer = timer + ":";
+    if (ShowSeconds() >= 10) {
+      timer.concat(ShowSeconds());
+    } else {
+      timer = timer + "0";
+      timer.concat(ShowSeconds());
+    }
+    if (timer.equals("1:0"))
+      timer = timer + "0";
+    Serial.print(timer.substring(0));
+    timer = "";
+    if (TimeCheck(0, 0, 0)) {
+      Serial.write(0xFE); //set cursor home
+      Serial.write(0x46);
+      delay(2);
+      Serial.print("GAME OVER!");
+      delay(1000);
+      fail = true;
+      Clock++;
+    }
+  }
+}
+
+void clearScreen() {
+  Serial.write(0xFE); // clears screen
+  Serial.write(0x51);
+  delay(500);
+}
+void resetEncoder() {
+  encoderValue = 0;
+  letter = "A";
+}
+void updateEncoder() {
+
+  int MSB = digitalRead(encoderPin1); //MSB = most significant bit
+  int LSB = digitalRead(encoderPin2); //LSB = least significant bit
+
+  int encoded = (MSB << 1) | LSB; //converting the 2 pin value to single number
+  int sum = (lastEncoded << 2) | encoded; //adding it to the previous encoded value
+
+  if (sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011) encoderValue++;
+  if (sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000) encoderValue--;
+
+  lastEncoded = encoded; //store this value for next time
+  letter = (char)((encoderValue / 4 + 64 + 14) % 26 + 65);
+}
+
+void checkLetter(char c) {
+  if (wordVar.indexOf(c) == -1) {
+    clearScreen();
+    Serial.print("WRONG");
+    delay(1000);
+    counter = 0;
+    passCounter = 0;
+    wordCheck = wordVar;
+  } else {
+    if (wordCheck.indexOf(c) != -1)
+      passCounter++;
+    for (int i = 0; i < wordVar.length(); i++) {
+      if (wordVar.indexOf(c, i) == -1)
+        break;
+      Serial.write(0xFE); //set cursor position
+      Serial.write(0x45);
+      Serial.write(wordVar.indexOf(c, i));
+      delay(100);
+      Serial.print(c);
+      wordCheck.setCharAt(wordCheck.indexOf(c, i), '?');
+    }
+  }
+}
+
+boolean CountDownTimer() {
+  static unsigned long duration = 1000000; // 1 second]
+  timeFlag = false;
+
+  if (!Stop && !Paused) // if not Stopped or Paused, run timer
+  {
+    // check the time difference and see if 1 second has elapsed
+    if ((_micro = micros()) - time > duration) {
+      Clock--;
+      timeFlag = true;
+
+      if (Clock == 0) // check to see if the clock is 0
+        Stop = true; // If so, stop the timer
+
+      // check to see if micros() has rolled over, if not,
+      // then increment "time" by duration
+      _micro < time ? time = _micro : time += duration;
+    }
+  }
+  return !Stop; // return the state of the timer
+}
+
+void ResetTimer() {
+  SetTimer(R_clock);
+  Stop = false;
+}
+
+void StartTimer() {
+  Watch = micros(); // get the initial microseconds at the start of the timer
+  time = micros(); // hwd added so timer will reset if stopped and then started
+  Stop = false;
+  Paused = false;
+}
+
+void StopTimer() {
+  Stop = true;
+}
+
+void StopTimerAt(unsigned int hours, unsigned int minutes, unsigned int seconds) {
+  if (TimeCheck(hours, minutes, seconds))
+    Stop = true;
+}
+
+void PauseTimer() {
+  Paused = true;
+}
+
+void ResumeTimer() // You can resume the timer if you ever stop it.
+{
+  Paused = false;
+}
+
+void SetTimer(unsigned int hours, unsigned int minutes, unsigned int seconds) {
+  // This handles invalid time overflow ie 1(H), 0(M), 120(S) -> 1, 2, 0
+  unsigned int _S = (seconds / 60), _M = (minutes / 60);
+  if (_S) minutes += _S;
+  if (_M) hours += _M;
+
+  Clock = (hours * 3600) + (minutes * 60) + (seconds % 60);
+  R_clock = Clock;
+  Stop = false;
+}
+
+void SetTimer(unsigned int seconds) {
+  // StartTimer(seconds / 3600, (seconds / 3600) / 60, seconds % 60);
+  Clock = seconds;
+  R_clock = Clock;
+  Stop = false;
+}
+
+int ShowHours() {
+  return Clock / 3600;
+}
+
+int ShowMinutes() {
+  return (Clock / 60) % 60;
+}
+
+int ShowSeconds() {
+  return Clock % 60;
+}
+
+
+boolean TimeHasChanged() {
+  return timeFlag;
+}
+
+// output true if timer equals requested time
+boolean TimeCheck(unsigned int hours, unsigned int minutes, unsigned int seconds) {
+  return (hours == ShowHours() && minutes == ShowMinutes() && seconds == ShowSeconds());
+}
