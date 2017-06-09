@@ -2,24 +2,27 @@
 int encoderPin1 = 2;
 int encoderPin2 = 3;
 
+//variables for determining letter from rotary encoder
 volatile int lastEncoded = 0;
-volatile long encoderValue = 0;
-
+volatile long encoderValue = 0; //stores ASCII value
 int lastMSB = 0;
 int lastLSB = 0;
 
+//reading button
 int buttonPin = 7;
 int buttonState = 0;
 
+//used in each round
 String wordVar = "VIOLET";
-String wordCheck = "VIOLET";
-char letter = ' ';
-int counter = 0;
-boolean fail = false;
-int roundCheck = 1;
-int passCounter = 0;
-boolean start = true;
+String wordCheck = "VIOLET"; //used to try to prevent cheating by selecting the same correct letter over and over again
+char letter = ' '; //letter determined by the rotary encoder
+int counter = 0;  //checks if screen is cleared
+boolean fail = false;  //checks if game over
+int roundCheck = 1;  //counts round of the game
+int passCounter = 0; //counts letters that have been correctly guessed 
+boolean start = true; //for restarting the game
 
+//used for timer
 unsigned long Watch, _micro, time = micros();
 unsigned int Clock = 0, R_clock;
 boolean Reset = false, Stop = false, Paused = false;
@@ -28,16 +31,17 @@ String timer = "";
 
 void setup() {
   Serial.begin(9600);
-  SetTimer(0, 1, 31); // 10 seconds
+  SetTimer(0, 1, 31); // timer of one and a half minutes
   StartTimer();
-  pinMode(buttonPin, INPUT);
 
+//initializes pins
+  pinMode(buttonPin, INPUT);
   pinMode(encoderPin1, INPUT);
   pinMode(encoderPin2, INPUT);
-
   digitalWrite(encoderPin1, HIGH); //turn pullup resistor on
   digitalWrite(encoderPin2, HIGH); //turn pullup resistor on
 
+//LCD setup
   delay(100);
   Serial.write(0xFE); //contrast
   Serial.write(0x52);
@@ -56,6 +60,7 @@ void setup() {
   Serial.write(0xFE); //underline off
   Serial.write(0x48);
   delay(20);
+
   updateEncoder();
   //call updateEncoder() when any high/low changed seen
   //on interrupt 0 (pin 2), or interrupt 1 (pin 3)
@@ -67,17 +72,21 @@ void loop() {
   Serial.write(0xFE); //set cursor home
   Serial.write(0x46);
   delay(2);
+
+//restarts game
   if (fail == true) {
     ResetTimer();
     clearScreen();
     resetEncoder();
     fail = false;
-    counter = 0;
+    counter = 0; 
     roundCheck = 1;
     wordVar = "VIOLET";
     wordCheck = wordVar;
     start = true;
   }
+
+//starts game from welcome screen
   if (start)
   {
     StopTimer();
@@ -88,22 +97,26 @@ void loop() {
     Serial.write(0x40); //bottom left
     delay(100);
     Serial.print("    TO BEGIN");
-    do
+
+    do //shows welcome screen until button is pressed
     {
       buttonState = digitalRead(buttonPin);
     } while (buttonState == HIGH);
+
     StartTimer();
     start = false;
     clearScreen();
   }
-  if ((roundCheck == 1 && passCounter >= wordVar.length()) || (roundCheck == 2 && passCounter >= 6) || (roundCheck == 3 && passCounter >= 7)) {
-    clearScreen();
-    if (roundCheck == 1)
-      wordVar = "HONEYBEE";
 
+//determines whether round is complete
+  if ((roundCheck == 1 && passCounter >= wordVar.length()) || (roundCheck == 2 && passCounter >= 5) || (roundCheck == 3 && passCounter >= 7)) {
+    clearScreen();
+//changes word for each round
+    if (roundCheck == 1)
+      wordVar = "BUMBLEBEE";
     else if (roundCheck == 2)
       wordVar = "DANDELION";
-    else if (roundCheck == 3)
+    else if (roundCheck == 3) //displays ending screen with padlock code
     {
       clearScreen();
       Serial.print("YOU WON!");
@@ -111,38 +124,43 @@ void loop() {
       Serial.write(0x45);
       Serial.write(0x40); //bottom left
       Serial.print("CODE: GUC");
-      for (int i = 0; i < 5; i = 0)
+      for (int i = 0; i < 5; i = 0) //ending screen shows forever
       {}
     }
+//displays next round message
     Serial.print("YAY! NEXT ROUND!");
     delay(750);
     wordCheck = wordVar;
     passCounter = 0;
     resetEncoder();
-    roundCheck++;
+    roundCheck++; //increases counter for round
     counter = 0;
     clearScreen();
     ResetTimer();
   }
+
+//displays underscores for the word again
   if (counter == 0) {
     for (int i = 0; i < wordVar.length(); i++) {
       Serial.print("_");
     }
     counter++;
   }
+
   Serial.write(0xFE); //set cursor position
   Serial.write(0x45);
   Serial.write(0x4F); //bottom right
   delay(10);
-  Serial.print(letter);
-  buttonState = digitalRead(buttonPin);
+  Serial.print(letter); //prints letter determined by the rotary encoder
+  buttonState = digitalRead(buttonPin); //checks if button is pressed
+//checks if user is trying to select a letter
   if (buttonState == LOW && !(TimeCheck(0, 1, 31)))
   {
-    checkLetter(letter);
+    checkLetter(letter); //calls method to check if letter is in mystery word
   }
 
   CountDownTimer(); // run the timer
-  // this prevents the time from being constantly shown.
+  // controls and formats timer
   if (TimeHasChanged()) {
     Serial.write(0xFE); //set cursor position
     Serial.write(0x45);
@@ -159,6 +177,7 @@ void loop() {
       timer = timer + "0";
     Serial.print(timer.substring(0));
     timer = "";
+//displays game over message when time runs out
     if (TimeCheck(0, 0, 0)) {
       Serial.write(0xFE); //set cursor home
       Serial.write(0x46);
@@ -170,16 +189,20 @@ void loop() {
     }
   }
 }
-
+//clears LCD
 void clearScreen() {
   Serial.write(0xFE); // clears screen
   Serial.write(0x51);
   delay(500);
 }
-void resetEncoder() {
+
+//resets rotary encoder
+void resetEncoder() { 
   encoderValue = 0;
   letter = "A";
 }
+
+//determines letter when rotary encoder is spun
 void updateEncoder() {
 
   int MSB = digitalRead(encoderPin1); //MSB = most significant bit
@@ -192,33 +215,36 @@ void updateEncoder() {
   if (sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000) encoderValue--;
 
   lastEncoded = encoded; //store this value for next time
-  letter = (char)((encoderValue / 4 + 64 + 14) % 26 + 65);
+  letter = (char)((encoderValue / 4 + 64 + 14) % 26 + 65); //assigns letter based on the ASCII value
 }
 
+//checks if letter is in the mystery word
 void checkLetter(char c) {
-  if (wordVar.indexOf(c) == -1) {
+  if (wordVar.indexOf(c) == -1) { //if letter is not in the word
     clearScreen();
     Serial.print("WRONG");
     delay(1000);
     counter = 0;
     passCounter = 0;
     wordCheck = wordVar;
-  } else {
+  }
+ else { //if the letter is in the word
     if (wordCheck.indexOf(c) != -1)
       passCounter++;
-    for (int i = 0; i < wordVar.length(); i++) {
+    for (int i = 0; i < wordVar.length(); i++) { //checks all indexes of the word
       if (wordVar.indexOf(c, i) == -1)
         break;
       Serial.write(0xFE); //set cursor position
       Serial.write(0x45);
-      Serial.write(wordVar.indexOf(c, i));
+      Serial.write(wordVar.indexOf(c, i)); //prints letter in appropriate blanks
       delay(100);
       Serial.print(c);
-      wordCheck.setCharAt(wordCheck.indexOf(c, i), '?');
+      wordCheck.setCharAt(wordCheck.indexOf(c, i), '?');  //necessary to prevent cheating by selecting the same correct letter multiple times so that passCounter does not increase when it should not
     }
   }
 }
 
+//the rest of the methods are part of the Timer library
 boolean CountDownTimer() {
   static unsigned long duration = 1000000; // 1 second]
   timeFlag = false;
