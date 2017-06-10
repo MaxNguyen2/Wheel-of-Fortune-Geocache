@@ -113,7 +113,7 @@ void loop() {
     clearScreen();
 //changes word for each round
     if (roundCheck == 1)
-      wordVar = "BUMBLEBEE";
+      wordVar = "HONEYBEE";
     else if (roundCheck == 2)
       wordVar = "DANDELION";
     else if (roundCheck == 3) //displays ending screen with padlock code
