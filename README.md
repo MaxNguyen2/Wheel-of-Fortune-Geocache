@@ -1,1 +1,2 @@
 # Wheel of Fortune Geocache
+This code was developed for SRT 3 for the geocache project in the Arduino language. The geocache game was a word-guessing game where users had to guess the letters of three mystery words in order to obtain the padlock code. It allows a user to spin a rotary encoder to scroll through the letters of the alphabet and display them on the LCD. They can press the rotary encoder to select letters and see if they are in the mystery word. Each round has a one minute and a half timer. When the timer runs out, the game restarts from the welcome screen.
